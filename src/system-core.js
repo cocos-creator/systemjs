@@ -15,6 +15,7 @@
  * System.prototype.instantiate implementations
  */
 import { global } from './common.js';
+import * as common from './common.js';
 export { systemJSPrototype, REGISTRY }
 
 const hasSymbol = typeof Symbol !== 'undefined';
@@ -26,6 +27,10 @@ function SystemJS () {
 }
 
 const systemJSPrototype = SystemJS.prototype;
+
+systemJSPrototype.patches = {};
+
+systemJSPrototype.patches.common = common;
 
 systemJSPrototype.prepareImport = function () {};
 

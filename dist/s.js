@@ -1,5 +1,5 @@
 /*
-* SJS 6.2.5
+* SJS 1.0.0-beta
 * Minimal SystemJS Build
 */
 (function () {
@@ -117,6 +117,91 @@
     return resolveIfNotPlainOrUrl(relUrl, parentUrl) || (relUrl.indexOf(':') !== -1 ? relUrl : resolveIfNotPlainOrUrl('./' + relUrl, parentUrl));
   }
 
+  function objectAssign (to, from) {
+    for (let p in from)
+      to[p] = from[p];
+    return to;
+  }
+
+  function resolveAndComposePackages (packages, outPackages, baseUrl, parentMap, parentUrl) {
+    for (let p in packages) {
+      const resolvedLhs = resolveIfNotPlainOrUrl(p, baseUrl) || p;
+      const rhs = packages[p];
+      // package fallbacks not currently supported
+      if (typeof rhs !== 'string')
+        continue;
+      const mapped = resolveImportMap(parentMap, resolveIfNotPlainOrUrl(rhs, baseUrl) || rhs, parentUrl);
+      if (!mapped)
+        targetWarning(p, rhs, 'bare specifier did not resolve');
+      else
+        outPackages[resolvedLhs] = mapped;
+    }
+  }
+
+  function resolveAndComposeImportMap (json, baseUrl, parentMap) {
+    const outMap = { imports: objectAssign({}, parentMap.imports), scopes: objectAssign({}, parentMap.scopes) };
+
+    if (json.imports)
+      resolveAndComposePackages(json.imports, outMap.imports, baseUrl, parentMap, null);
+
+    if (json.scopes)
+      for (let s in json.scopes) {
+        const resolvedScope = resolveUrl(s, baseUrl);
+        resolveAndComposePackages(json.scopes[s], outMap.scopes[resolvedScope] || (outMap.scopes[resolvedScope] = {}), baseUrl, parentMap, resolvedScope);
+      }
+
+    return outMap;
+  }
+
+  function getMatch (path, matchObj) {
+    if (matchObj[path])
+      return path;
+    let sepIndex = path.length;
+    do {
+      const segment = path.slice(0, sepIndex + 1);
+      if (segment in matchObj)
+        return segment;
+    } while ((sepIndex = path.lastIndexOf('/', sepIndex - 1)) !== -1)
+  }
+
+  function applyPackages (id, packages) {
+    const pkgName = getMatch(id, packages);
+    if (pkgName) {
+      const pkg = packages[pkgName];
+      if (pkg === null) return;
+      if (id.length > pkgName.length && pkg[pkg.length - 1] !== '/')
+        targetWarning(pkgName, pkg, "should have a trailing '/'");
+      else
+        return pkg + id.slice(pkgName.length);
+    }
+  }
+
+  function targetWarning (match, target, msg) {
+    console.warn("Package target " + msg + ", resolving target '" + target + "' for " + match);
+  }
+
+  function resolveImportMap (importMap, resolvedOrPlain, parentUrl) {
+    let scopeUrl = parentUrl && getMatch(parentUrl, importMap.scopes);
+    while (scopeUrl) {
+      const packageResolution = applyPackages(resolvedOrPlain, importMap.scopes[scopeUrl]);
+      if (packageResolution)
+        return packageResolution;
+      scopeUrl = getMatch(scopeUrl.slice(0, scopeUrl.lastIndexOf('/')), importMap.scopes);
+    }
+    return applyPackages(resolvedOrPlain, importMap.imports) || resolvedOrPlain.indexOf(':') !== -1 && resolvedOrPlain;
+  }
+
+  var common = /*#__PURE__*/Object.freeze({
+    hasSelf: hasSelf,
+    hasDocument: hasDocument,
+    global: envGlobal,
+    get baseUrl () { return baseUrl; },
+    resolveIfNotPlainOrUrl: resolveIfNotPlainOrUrl,
+    resolveUrl: resolveUrl,
+    resolveAndComposeImportMap: resolveAndComposeImportMap,
+    resolveImportMap: resolveImportMap
+  });
+
   /*
    * SystemJS Core
    * 
@@ -143,6 +228,10 @@
   }
 
   const systemJSPrototype = SystemJS.prototype;
+
+  systemJSPrototype.patches = {};
+
+  systemJSPrototype.patches.common = common;
 
   systemJSPrototype.prepareImport = function () {};
 

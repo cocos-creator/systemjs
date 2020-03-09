@@ -1,6 +1,6 @@
 {
-  "name": "systemjs",
-  "version": "6.2.5",
+  "name": "@cocos/systemjs",
+  "version": "1.0.0-beta",
   "description": "Dynamic ES module loader",
   "repository": {
     "type": "git",
